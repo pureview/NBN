@@ -1,0 +1,27 @@
+''' Lib to calculate log likelihood of generative model and test set.'''
+
+import numpy as np
+import sys
+import os
+
+from tensorflow.examples.tutorials.mnist.input_data import read_data_sets
+
+mnist=read_data_sets('dataset')
+
+def loglikelihood_mnist(likelihood,label=-1):
+    # likelihood is the probability a pixel is 1
+    batchsize=20
+    test_images=mnist.test.images
+    labels=mnist.test.labels
+    assert test_images.shape[1]==likelihod.shape[0]
+    log_prob=0
+    for i in range(len(test_images)):
+        for j in range(test_images.shape[1]):
+            if label!=-1 and labels[j]!=label:
+                # skip unmatch label
+                continue
+            if test_images[i,j]==0:
+                log_prob+=np.log(1-likelihood[j])
+            else:
+                log_prob+=np.log(likelihood[j])
+    return log_prob
