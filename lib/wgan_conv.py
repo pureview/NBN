@@ -1,18 +1,40 @@
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
-import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+#import matplotlib as mpl
+#mpl.use('Agg')
+#import matplotlib.pyplot as plt
+#import matplotlib.gridspec as gridspec
 import os,sys
+import cv2
 
 sys.path.append('utils')
-from nets import *
-from datas import *
+from utils.nets import *
+from utils.datas import *
+
+unit_batch_size=64
 
 def sample_z(m, n):
 	return np.random.uniform(-1., 1., size=[m, n])
+def visualize(x, filename, batchsize=unit_batch_size):
+    cols = int(np.sqrt(batchsize))
+    rows = cols
+    if cols * cols != batchsize:
+        rows = int(batchsize / cols) + 1
+    pixels = np.zeros([rows * 30 - 2, cols * 30 - 2])
+    #print('please check data infomation');embed();exit() 
+    x*=255
+    for i in range(batchsize):
+        candidate = np.reshape(x[i], [28, 28])
+        pixels[int(i / cols) * 30:int(i / cols) * 30 + 28, (i % cols) * 30:(i % cols) * 30 + 28] = candidate
+    flag = cv2.imwrite(filename, pixels)
+    if flag:
+        pass
+        #print('done dump', filename, 'successful.')
+    else:
+        #embed()
+        print('done dump', filename, 'fail!')
+
 
 class WGAN():
 	def __init__(self, generator, discriminator, data):
@@ -45,10 +67,20 @@ class WGAN():
 		gpu_options = tf.GPUOptions(allow_growth=True)
 		self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
-	def train(self, sample_folder, training_epoches = 1000000, batch_size = 64):
+	def train(self, sample_folder, training_epoches = 1000000, batch_size = unit_batch_size):
 		i = 0
 		self.sess.run(tf.global_variables_initializer())
-		
+		saver=tf.train.Saver()
+		model_dir='ckpt/wgan_conv/'
+		if not os.path.exists(model_dir):
+			os.mkdir(model_dir)
+		checkpoint = tf.train.latest_checkpoint(model_dir+'model')
+		if checkpoint != None:
+			saver.restore(self.sess, checkpoint)
+			i = int(int(checkpoint.split('.')[0].split('-')[-1]) / 1000) + 1
+			print('restoring i=', i)
+			print('restoring from', checkpoint)
+
 		for epoch in range(training_epoches):
 			# update D
 			n_d = 100 if epoch < 25 or (epoch+1) % 500 == 0 else 5
@@ -74,31 +106,24 @@ class WGAN():
 						self.G_loss,
 						feed_dict={self.z: sample_z(batch_size, self.z_dim)})
 				print('Iter: {}; D loss: {:.4}; G_loss: {:.4}'.format(epoch, D_loss_curr, G_loss_curr))
-
 				if epoch % 1000 == 0:
-					samples = self.sess.run(self.G_sample, feed_dict={self.z: sample_z(16, self.z_dim)})
-
-					fig = self.data.data2fig(samples)
-					plt.savefig('{}/{}.png'.format(sample_folder, str(i).zfill(3)), bbox_inches='tight')
+					saver.save(self.sess,model_dir+'model',global_step=epoch)
+					samples = self.sess.run(self.G_sample, feed_dict={self.z: sample_z(batch_size, self.z_dim)})
+					visualize(samples,sample_folder+str(i).zfill(3)+'.jpg')
 					i += 1
-					plt.close(fig)
 
-
+				
 if __name__ == '__main__':
 
-	os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+	#os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 	
 	sample_folder = 'Samples/mnist_wgan_conv'
 	if not os.path.exists(sample_folder):
 		os.makedirs(sample_folder)
-
 	# param
 	generator = G_conv_mnist()
 	discriminator = D_conv_mnist()
-
 	data = mnist()
-
 	# run
 	wgan = WGAN(generator, discriminator, data)
 	wgan.train(sample_folder)
-

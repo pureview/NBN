@@ -1,13 +1,9 @@
 import os,sys
-from PIL import Image
 import scipy.misc
 from glob import glob
 import numpy as np
-import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-
+#from tensorflow.contrib.keras.datasets import cifar10
+import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
 prefix = '../../dataset/'
@@ -108,6 +104,46 @@ class celebA():
 			ax.set_aspect('equal')
 			plt.imshow(sample)
 		return fig
+
+class cifar10():
+	def __init__(self,flag='conv',is_tanh=False):
+		self.X_dim=32*32*3 
+		self.z_dim=100
+		self.y_dim=10
+		self.size=32
+		self.channel=3
+		self.data=tf.contrib.keras.datasets.cifar10.load_data()
+		self.flag=flag
+		self.is_tanh=is_tanh
+		self.train_ind=0
+		self.test_ind=0
+		self.train_num=len(self.data[0][0])
+		self.test_num=len(self.data[1][0])
+	
+	def __call__(self,batch_size,test=False):
+		if not test:
+			# train
+			# get next batch
+			if self.train_ind+batch_size>=self.train_num:
+				self.train_ind=0	
+			batch_imgs,y=self.data[0][0][self.train_ind:self.train_ind+batch_size],self.data[0][1][self.train_ind:self.train_ind+batch_size]
+			self.train_ind+=batch_size
+			if self.flag=='conv':
+				batch_imgs=images
+			if self.is_tanh:
+				batch_imgs=batch_imgs*2-1
+			return batch_imgs,y
+		else:
+			if self.test_ind+batch_size>=self.test_num:
+				self.test_ind=0	
+			batch_imgs,y=self.data[0][0][self.test_ind:self.test_ind+batch_size],self.data[0][1][self.test_ind:self.test_ind+batch_size]
+			self.test_ind+=batch_size
+			if self.flag=='conv':
+				batch_imgs=images
+			if self.is_tanh:
+				batch_imgs=batch_imgs*2-1
+			return batch_imgs,y
+
 
 class mnist():
 	def __init__(self, flag='conv', is_tanh = False):
