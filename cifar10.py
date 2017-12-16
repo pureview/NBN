@@ -23,22 +23,19 @@ parser.add_argument('-conv',action='store_true',help='use convolution network')
 parser.add_argument('-dir','--log_dir',default='cifar_models',help='specify model save directory',dest='dir')
 parser.add_argument('-train',action='store_true',help='train network')
 parser.add_argument('-draw',action='store_true',help='draw testing set')
-parser.add_argument('-label',action='store_false',help='add label into network')
+parser.add_argument('-label',action='store_true',help='add label into network')
 parser.add_argument('-train_label',action='store_true',help='only train label')
 parser.add_argument('-cls',action='store_true',help='calculate classification accuracy of models')
 parser.add_argument('-iter',action='store_true',help='iter between prediction')
 parser.add_argument('-rr','--random_random',action='store_true',help='use random random algorithm',dest='rr')
 parser.add_argument('-rt','--random_thresh',type=float,default=0.6,help='random threshold',dest='rt')
-parser.add_argument('-dt','--draw_thresh',type=float,default=2.0,help='draw threshold',dest='dt')
+parser.add_argument('-dt','--draw_thresh',type=float,default=0.7,help='draw threshold',dest='dt')
 parser.add_argument('-wd',type=float,default=0.005,help='weight decay')
-parser.add_argument('-printhelp',action='store_true',dest='help')
+parser.add_argument('-batch_num',type=int,default=10,help='draw how many batches')
+#parser.add_argument('-printhelp',action='store_true',dest='help')
 
 ###############################################################
 res=parser.parse_args()
-if res.help:
-    parser.print_help()
-    exit()
-
 
 batchsize = 16
 log_dir = res.dir
@@ -197,21 +194,20 @@ class Network:
             # conv network, for cifar10, input dim is 13
             x=tf.contrib.layers.conv2d(input,16,5,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),biases_initializer=tf.constant_initializer(init_bias))
             x=tf.contrib.layers.conv2d(x,32,3,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),biases_initializer=tf.constant_initializer(init_bias))
-            x=tf.contrib.layers.max_pool2d(x,[2,2],stride=1,padding='SAME')
+            #x=tf.contrib.layers.max_pool2d(x,[2,2],stride=1,padding='SAME')
             x=tf.contrib.layers.conv2d(x,64,3,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),biases_initializer=tf.constant_initializer(init_bias))
             x=tf.contrib.layers.conv2d(x,128,3,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),biases_initializer=tf.constant_initializer(init_bias))
-            x=tf.contrib.layers.max_pool2d(x,[2,2],stride=1,padding='SAME')
+            #x=tf.contrib.layers.max_pool2d(x,[2,2],stride=1,padding='SAME')
             x=tf.contrib.layers.conv2d(x,64,3,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),biases_initializer=tf.constant_initializer(init_bias))
             x=tf.contrib.layers.conv2d(x,32,3,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),biases_initializer=tf.constant_initializer(init_bias))
-            x=tf.contrib.layers.max_pool2d(x,[2,2],stride=1,padding='SAME')
+            #x=tf.contrib.layers.max_pool2d(x,[2,2],stride=1,padding='SAME')
             x=tf.contrib.layers.conv2d(x,16,3,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),biases_initializer=tf.constant_initializer(init_bias))
             if label_flag:
                 x=tf.contrib.layers.conv2d(x,(image_chanel+label_size),3,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),
                     activation_fn=None,biases_initializer=tf.constant_initializer(init_bias))
             else:
-                x=tf.contrib.layers.conv2d(x,(image_chanel),3,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),
+                x=tf.contrib.layers.conv2d(x,image_chanel,3,weights_regularizer=tf.contrib.layers.l2_regularizer(weight_decay),
                     activation_fn=None,biases_initializer=tf.constant_initializer(init_bias))
-
 
         tf.summary.histogram('output', x)
         return x
@@ -244,6 +240,7 @@ def draw_cifar10(x,name='cifar10.jpg'):
     else:
         x=x[:,:,:,:image_chanel]
     pixels=np.zeros([rows*(image_size+2)-2,cols*(image_size+2)-2,image_chanel])
+    #if 'predict' in name:embed();exit();
     for i in range(batchsize):
         candidate=np.reshape(x[i],[image_size,image_size,image_chanel])
         pixels[int(i/cols)*(image_size+2):int(i/cols)*(image_size+2)+image_size,(i%cols)*(image_size+2):(i%cols)*(image_size+2)+image_size,:]=candidate
@@ -314,7 +311,7 @@ def cifar10_gen_iter(sess,x,y,dataset,iter_num=10,batch_num=10,save_dir='cifar10
             batchX=yval 
 
 
-def cifar10_gen_cover(sess,x,y,dataset,random_thresh=2,batch_num=100,random_flag=True,square=False,cross=False,
+def cifar10_gen_cover(sess,x,y,dataset,random_thresh=2,batch_num=res.batch_num,random_flag=True,square=False,cross=False,
                     square_width=0.3,save_dir='cifar10/',draw_flag=True):
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
@@ -339,15 +336,17 @@ def cifar10_gen_cover(sess,x,y,dataset,random_thresh=2,batch_num=100,random_flag
         elif random_flag:
             # randomly cover input pixels
             for i in range(batchsize):
-                ind=np.random.randint(0,image_size*image_size*image_chanel,int(image_size*image_size*image_chanel*random_thresh))
-                if conv_flag:
-                    batchX[i,ind//image_chanel//image_size,ind//image_chanel%image_size,ind%image_chanel]=0
-                    if label_flag:
-                        batchX[i,:,:,-10:]=0
-                else:
-                    batchX[i,ind]=0
-                    if label_flag:
-                        batchX[i,-10:]=0
+                inds=random.sample(range(image_size*image_size*image_chanel),int(image_size*image_size*image_chanel*random_thresh))
+                #ind=np.random.randint(0,image_size*image_size*image_chanel,int(image_size*image_size*image_chanel*random_thresh))
+                for ind in inds:
+                    if conv_flag:
+                        batchX[i,ind//image_chanel//image_size,ind//image_chanel%image_size,ind%image_chanel]=0
+                        if label_flag:
+                            batchX[i,:,:,-10:]=0
+                    else:
+                        batchX[i,ind]=0
+                        if label_flag:
+                            batchX[i,-10:]=0
         if draw_flag:
             draw_cifar10(batchX,name=save_dir+str(iter)+'-blured.jpg')
         yval = sess.run(y, feed_dict={x: batchX})
@@ -384,7 +383,7 @@ def train(network,dataset):
     minimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
     #minimizer=tf.train.RMSPropOptimizer(learning_rate,momentum=momentum)
     train_op = minimizer.minimize(net_loss+regular_loss)
-    saver = tf.train.Saver(keep_checkpoint_every_n_hours=1)
+    saver = tf.train.Saver()
     summary_op = tf.summary.merge_all()
     writer = tf.summary.FileWriter(log_dir, tf.get_default_graph())
     sess = tf.Session()
@@ -399,6 +398,7 @@ def train(network,dataset):
     else:
         i = 0
         print("start training from scratch")
+    #embed()
     if train_random:
         print("*************** Begin training **********************")
         moving_acc=0
@@ -426,6 +426,7 @@ def train(network,dataset):
             net_loss_val,regular_loss_val, _, summary_val = sess.run(
                 [net_loss,regular_loss, train_op, summary_op], feed_dict={input: batchX, label: batch})
             if plus % print_interval == 0:
+                print(sess.run(y,feed_dict={input:batchX})[0][0])
                 print(plus, ' -- net_loss_val=', net_loss_val, 'regular_loss_val=', regular_loss_val)
             if plus % save_interval == 0:
                 writer.add_summary(summary_val, plus)

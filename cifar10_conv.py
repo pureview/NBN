@@ -268,7 +268,8 @@ def cifar10_gen_cover(sess,x,y,dataset,draw_batch=50,random_thresh=cover_thresh,
             draw_cifar10(yval,name=save_dir+str(iter)+'-predict.jpg')
         # cal acc
         if conv_flag:
-            cls_acc+=np.sum(np.argmax(np.sum(yval[:,:,:,-label_size:],axis=[1,2]),axis=-1)==np.argmax(batch[:,0,0,-10:],axis=-1))/batchsize
+            cls_acc+=0
+            #cls_acc+=np.sum(np.argmax(np.sum(yval[:,:,:,-label_size:],axis=[1,2]),axis=-1)==np.argmax(batch[:,0,0,-10:],axis=-1))/batchsize
         else:
             cls_acc+=np.sum(np.argmax(yval[:,-10:],axis=-1)==np.argmax(batch[:,-10:],axis=-1))/batchsize
         sys.stdout.write('\r Having finished {0:>5.2%} %'.format(iter / test_iters))
@@ -335,7 +336,7 @@ def train(network,dataset):
     # test
     cifar10_gen_cover(sess,input,y,dataset)
     print('***********************  Begin Test ******************************')
-    cifar10_cls_test(sess,input,y,dataset)
+    #cifar10_cls_test(sess,input,y,dataset)
     
 if __name__ == '__main__':
     if start_over:

@@ -49,3 +49,8 @@ Temporary Items
 lib/ckpt
 lib/Samples
 *.pyc
+cifar_conv_models
+cifar_models
+dataset
+mnist_models
+__pycache__

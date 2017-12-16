@@ -5,6 +5,7 @@ import sys
 import shutil
 import random
 import numpy as np
+import argparse
 import cv2
 from lib import log_likelihood
 from IPython import embed
@@ -19,9 +20,22 @@ iter average acc: 0.9846
 #cover test: training iter=205000
 thresh= 3 cover_acc= 0.5379
 thresh= 2 cover_acc= 0.8792
-
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+thresh= 0.9 cover_acc= 0.7703 
+thresh= 0.7 cover_acc= 0.96
 
 '''
+
+parser=argparse.ArgumentParser()
+parser.add_argument('-test',action='store_true',help='test data')
+parser.add_argument('-startover',action='store_true',help='delete all models and startover')
+parser.add_argument('-train',action='store_true',help='start training')
+parser.add_argument('-draw_thresh',type=float,default=0.8,help='How much should we cover image')
+parser.add_argument('-square',action='store_true',help='whether to use square cover')
+parser.add_argument('-cross',action='store_true',help='whether to use cross cover')
+parser.add_argument('-square_width',type=float,default=0.3,help='specify the relative sqare width')
+parser.add_argument('-num_strip',type=int,default=5,help='how many strips used in cross')
+args=parser.parse_args()
 
 batchsize = 16
 log_dir = './mnist_models'
@@ -37,10 +51,10 @@ label_enlarge=10
 random_random=False
 draw_thresh=2
 train_flag = False  # whether train net or not
-start_over = False  # if True, delete models dir at first
-train_random= False # randomly choose some
+start_over = args.startover  # if True, delete models dir at first
+train_random= args.train # randomly choose some
 # get minist dataset from tensorflow examples
-mnist=read_data_sets('dataset',one_hot=True)
+mnist=read_data_sets('dataset/mnist',one_hot=True)
 network_size=28*28*2+10
 
 class Network:
@@ -395,11 +409,14 @@ def mnist_gen_iter(sess,x,y,iter_num=10,batch_num=10,save_dir='mnist/',random_th
             batchX[:,-10:]=0
     print('total_acc=',[x/batch_num for x in total_acc])
 
+def likelihood(sess,x,y):
+    raise NotImplementedError()
+
 def mnist_likelihood(sess,x,y):
-    batch=np.zeros((batchsize,28*28*2+10))
-    for i in range(10):
-        batch[i,-10+i]=1
-    yval=sess.run(y,feed_dict={x:batch})
+    #batch=np.zeros((batchsize,28*28*2+10))
+    #for i in range(10):
+    #    batch[i,-10+i]=1
+    #yval=sess.run(y,feed_dict={x:batch})
     # calculate log likelihood
     # #####################
     #       TODO          #
@@ -414,9 +431,10 @@ def mnist_likelihood(sess,x,y):
                 ret+=np.log2(min(max(yval[test_labels[i]][j],0.0001),1))
     return ret
 
-def mnist_gen_cover(sess,x,y,random_thresh=0,test_num=10000,
-                    random_flag=True,square=False,cross=False,
-                    square_width=0.3,save_dir='mnist/',draw_flag=False):
+def mnist_gen_cover(sess,x,y,random_thresh=0.7,test_num=10000,
+                    random_flag=True,square=args.square,cross=args.cross,
+		    square_width=args.square_width,save_dir='mnist/',draw_flag=True):
+    shutil.rmtree(save_dir)
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
     test_iters=int(test_num/batchsize)
@@ -430,15 +448,35 @@ def mnist_gen_cover(sess,x,y,random_thresh=0,test_num=10000,
         batchX=batch.copy()
         batchX[:,-10:]=0
         if square:
-            batchX=np.reshape(batchX,[batchsize,28])
+            #batchX=np.reshape(batchX,[batchsize,28])
+            # we should choose square indexes
+            square_low=int((1-square_width)/2*28)
+            square_high=28-square_low
+            for ind_x in range(28):
+                for ind_y in range(28):
+                    if ind_x>=square_low and ind_x<=square_high and \
+                        ind_y>=square_low and ind_y<=square_high:
+                        ind=ind_x*28+ind_y
+                        batchX[:,2*ind]=0
+                        batchX[:,2*ind+1]=0 
         elif cross:
-            raise NotImplementedError('I haven\' implement cross cover method')
+            stride=int(28/args.num_strip)
+            for ind_x in range(28):
+                for ind_y in range(28):
+                    if int(28/ind_x*args.num_strip)%2==0:
+                        ind=ind_x*28+ind_y
+                        batchX[:,2*ind]=0
+                        batchX[:,2*ind+1]=0
+            #raise NotImplementedError('I haven\' implement cross cover method')
         elif random_flag:
             # randomly cover input pixels
             for i in range(batchsize):
-                ind=np.random.randint(0,28*28,int(28*28*random_thresh))
-                batchX[i,2*ind]=0
-                batchX[i,1+2*ind]=0
+                # Note: here I change the way cover data
+                inds=random.sample(range(28*28),int(28*28*random_thresh))
+                #ind=np.random.randint(0,28*28,int(28*28*random_thresh))
+                for ind in inds:
+                    batchX[i,2*ind]=0
+                    batchX[i,1+2*ind]=0
         if draw_flag:
             draw_mnist(batchX,name='mnist/'+str(iter)+'-blured.jpg')
         yval = sess.run(y, feed_dict={x: batchX})
@@ -464,7 +502,8 @@ def train(network,group_info):
     minimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
     #minimizer=tf.train.RMSPropOptimizer(learning_rate,momentum=momentum)
     train_op = minimizer.minimize(loss)
-    saver = tf.train.Saver(keep_checkpoint_every_n_hours=1)
+    #saver = tf.train.Saver(keep_checkpoint_every_n_hours=1)
+    saver = tf.train.Saver()
     summary_op = tf.summary.merge_all()
     writer = tf.summary.FileWriter(log_dir, tf.get_default_graph())
     sess = tf.Session()
@@ -511,8 +550,11 @@ def train(network,group_info):
                 saver.save(sess, log_dir + '/models', plus)
     #mnist_cls_test(sess,input,y)
     #mnist_gen_test(sess,input,y)
-    #mnist_gen_cover(sess,input,y)
-    mnist_gen_iter(sess,input,y)
+    if args.test:
+        print('***********************  Begin Test ******************************')
+        mnist_gen_cover(sess,input,y,random_thresh=args.draw_thresh)
+        print('***********************  End Test ******************************')
+    #mnist_gen_iter(sess,input,y)
     if train_flag:
         moving_acc=0
         for plus in range(max_iter):
@@ -538,7 +580,6 @@ def train(network,group_info):
                     writer.add_summary(summary_val, cur_pos)
                     saver.save(sess, log_dir + '/models', cur_pos)
     # test
-    print('***********************  Begin Test ******************************')
     #embed()
     if False:
         # deduction test
